@@ -3,8 +3,7 @@ import random
 import psycopg
 
 
-SEED_LIMIT = 100
-CACHE_LIMIT = 1000
+SEED_LIMIT = 1000
 
 REEFER_UNITS = [
     "Carrier X4 7500", "Carrier X4 7300", "Carrier Vector 8600",
@@ -52,11 +51,24 @@ class Trailers:
             cur.execute("SELECT region FROM [SHOW REGIONS FROM DATABASE]")
             self.regions = [row[0] for row in cur.fetchall()]
 
+            count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
+            offset = random.randint(0, max(0, count - SEED_LIMIT))
             cur.execute(
-                "SELECT trailer_number FROM trailer_global LIMIT %s",
-                (SEED_LIMIT,),
+                "SELECT trailer_number FROM trailer_global LIMIT %s OFFSET %s",
+                (SEED_LIMIT, offset),
             )
             self.global_numbers.extend(row[0] for row in cur.fetchall())
+
+            count = cur.execute(
+                "SELECT count(*) FROM trailer_rbr WHERE region = %s",
+                (self.region,),
+            ).fetchone()[0]
+            offset = random.randint(0, max(0, count - SEED_LIMIT))
+            cur.execute(
+                "SELECT id FROM trailer_rbr WHERE region = %s LIMIT %s OFFSET %s",
+                (self.region, SEED_LIMIT, offset),
+            )
+            self.rbr_ids.extend(row[0] for row in cur.fetchall())
 
 
     def loop(self):
@@ -66,8 +78,7 @@ class Trailers:
                 self.global_select,
                 self.rbr_insert,
                 self.rbr_update,
-                self.rbr_select,
-                self.trim_caches
+                self.rbr_select
             ]
 
 
@@ -113,8 +124,6 @@ class Trailers:
                 (number, self.random_info()),
             )
 
-        self.global_numbers.append(number)
-
 
     def global_update(self, conn: psycopg.Connection):
         with conn.cursor() as cur:
@@ -136,14 +145,13 @@ class Trailers:
     def rbr_insert(self, conn: psycopg.Connection):
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES (%s, %s, %s) RETURNING id",
+                "INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES (%s, %s, %s)",
                 (
                     self.random_trailer_number(),
                     random.randint(0, 100),
                     round(random.uniform(0, 75), 2),
                 ),
             )
-            self.rbr_ids.append(cur.fetchone()[0])
 
 
     def rbr_update(self, conn: psycopg.Connection):
@@ -166,11 +174,3 @@ class Trailers:
                 (self.region, random.choice(self.rbr_ids)),
             )
             cur.fetchone()
-
-
-    def trim_caches(self, conn: psycopg.Connection):
-        if len(self.global_numbers) > CACHE_LIMIT:
-            self.global_numbers[:] = random.sample(self.global_numbers, CACHE_LIMIT)
-
-        if len(self.rbr_ids) > CACHE_LIMIT:
-            self.rbr_ids[:] = random.sample(self.rbr_ids, CACHE_LIMIT)
