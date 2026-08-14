@@ -11,6 +11,7 @@ RUN pip install \
 
 RUN mkdir -p /app
 COPY Trailers.py /app/
+COPY datagen.py /app/
 
 ENV PYTHONUNBUFFERED=1
 
