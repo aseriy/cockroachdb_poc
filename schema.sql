@@ -4,7 +4,7 @@ CREATE TABLE trailer_global (
     info                STRING DEFAULT NULL
 ) LOCALITY GLOBAL;
 
-CREATE UNIQUE INDEX on trailer_global(trailer_number); 
+CREATE UNIQUE INDEX ON trailer_global(trailer_number); 
 
 
 INSERT INTO trailer_global (trailer_number, info) VALUES
@@ -115,15 +115,18 @@ CREATE TABLE trailer_rbr (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   region              crdb_internal_region NOT VISIBLE NOT NULL AS (
                           CASE
-                              WHEN trailer_number LIKE 'TRL-EAST-1%' THEN 'tx1'
-                              WHEN trailer_number LIKE 'TRL-EAST-2%' THEN 'tx2'
-                              WHEN trailer_number LIKE 'TRL-WEST-2%' THEN 'tx3'
+                              WHEN trailer_number LIKE 'TRL-EAST-%' THEN 'tx1'
+                              WHEN trailer_number LIKE 'TRL-WEST-%' THEN 'tx2'
+                              ELSE 'tx3'
                           END
                       ) STORED,
   trailer_number      STRING NOT NULL,
   param1              INTEGER DEFAULT 0,
   param2              FLOAT DEFAULT 0.0
 ) LOCALITY REGIONAL BY ROW AS region;
+
+CREATE UNIQUE INDEX ON trailer_rbr (trailer_number); 
+CREATE INDEX ON trailer_rbr (substr(trailer_number, 1, 11));
 
 
 INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES

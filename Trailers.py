@@ -4,6 +4,7 @@ import psycopg
 
 
 SEED_LIMIT = 1000
+BATCH_SIZE = 1000
 
 REEFER_UNITS = [
     "Carrier X4 7500", "Carrier X4 7300", "Carrier Vector 8600",
@@ -39,6 +40,7 @@ class Trailers:
         if "prefix" not in args:
             raise RuntimeError("args is missing required key: prefix")
         self.prefix = args["prefix"]
+        self.init = args.get("init")
 
         self.global_numbers = []
         self.rbr_ids = []
@@ -50,6 +52,34 @@ class Trailers:
 
             cur.execute("SELECT region FROM [SHOW REGIONS FROM DATABASE]")
             self.regions = [row[0] for row in cur.fetchall()]
+
+            if self.init:
+                share = round(self.init / total_thread_count)
+
+                for start in range(0, share, BATCH_SIZE):
+                    chunk = min(BATCH_SIZE, share - start)
+
+                    values = ", ".join(["(%s || unique_rowid()::STRING, %s)"] * chunk)
+                    params = []
+                    for _ in range(chunk):
+                        params.extend([self.prefix, self.random_info()])
+                    cur.execute(
+                        f"INSERT INTO trailer_global (trailer_number, info) VALUES {values}",
+                        params,
+                    )
+
+                    values = ", ".join(["(%s || unique_rowid()::STRING, %s, %s)"] * chunk)
+                    params = []
+                    for _ in range(chunk):
+                        params.extend([
+                            self.prefix,
+                            random.randint(0, 100),
+                            round(random.uniform(0, 75), 2),
+                        ])
+                    cur.execute(
+                        f"INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES {values}",
+                        params,
+                    )
 
             count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
             offset = random.randint(0, max(0, count - SEED_LIMIT))
@@ -82,10 +112,6 @@ class Trailers:
             ]
 
 
-    def random_trailer_number(self):
-        return f"{self.prefix}-{random.randint(10**9, 10**10 - 1)}"
-
-
     def random_date(self):
         return f"2026-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
 
@@ -116,12 +142,10 @@ class Trailers:
 
 
     def global_insert(self, conn: psycopg.Connection):
-        number = self.random_trailer_number()
-
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO trailer_global (trailer_number, info) VALUES (%s, %s)",
-                (number, self.random_info()),
+                "INSERT INTO trailer_global (trailer_number, info) VALUES (%s || unique_rowid()::STRING, %s)",
+                (self.prefix, self.random_info()),
             )
 
 
@@ -145,9 +169,9 @@ class Trailers:
     def rbr_insert(self, conn: psycopg.Connection):
         with conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES (%s, %s, %s)",
+                "INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES (%s || unique_rowid()::STRING, %s, %s)",
                 (
-                    self.random_trailer_number(),
+                    self.prefix,
                     random.randint(0, 100),
                     round(random.uniform(0, 75), 2),
                 ),
