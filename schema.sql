@@ -11,9 +11,9 @@ CREATE TABLE trailer_rbr (
   id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   region              crdb_internal_region NOT VISIBLE NOT NULL AS (
                           CASE
-                              WHEN trailer_number LIKE 'TRL-EAST-%' THEN 'tx1'
-                              WHEN trailer_number LIKE 'TRL-WEST-%' THEN 'tx2'
-                              ELSE 'tx3'
+                              WHEN trailer_number LIKE 'TRL-EAST-%' THEN 'us-east'
+                              WHEN trailer_number LIKE 'TRL-WEST-%' THEN 'us-west'
+                              ELSE 'us-central'
                           END
                       ) STORED,
   trailer_number      STRING NOT NULL,

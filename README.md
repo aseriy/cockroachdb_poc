@@ -2,9 +2,9 @@
 
 This repo is a proof of concept for CockroachDB multi-region data locality on a specific topology: **three regions, two of which run applications**.
 
-- **East (`tx1`)** — runs applications
-- **West (`tx2`)** — runs applications
-- **Central (`tx3`)** — the quorum tiebreaker that lets the cluster survive a full region failure; no application data is homed there (it could take on other roles later)
+- **East (`us-east`)** — runs applications
+- **West (`us-west`)** — runs applications
+- **Central (`us-central`)** — the quorum tiebreaker that lets the cluster survive a full region failure; no application data is homed there (it could take on other roles later)
 
 It demonstrates the two table locality strategies and the trade-offs between them:
 
@@ -16,7 +16,7 @@ It demonstrates the two table locality strategies and the trade-offs between the
   1. it needs to be optimized for fast `INSERT`s, `UPDATE`s and `DELETE`s in multiple regions
   2. `SELECT`s are typically predicated on specific values, e.g. `id='12345'`
 
-Rows are homed by trailer-number prefix: `TRL-EAST-*` → `tx1`, `TRL-WEST-*` → `tx2`. Anything else lands in `tx3` — a catch-all that doubles as an accident audit (`SELECT count(*) FROM trailer_rbr WHERE region = 'tx3'` should be zero).
+Rows are homed by trailer-number prefix: `TRL-EAST-*` → `us-east`, `TRL-WEST-*` → `us-west`. Anything else lands in `us-central` — a catch-all that doubles as an accident audit (`SELECT count(*) FROM trailer_rbr WHERE region = 'us-central'` should be zero).
 
 ## What's in the repo
 
@@ -36,10 +36,10 @@ Rows are homed by trailer-number prefix: `TRL-EAST-*` → `tx1`, `TRL-WEST-*` �
 Add the regions and set the survival objective:
 
 ```sql
-ALTER DATABASE uscs SET PRIMARY REGION tx1;
-ALTER DATABASE uscs ADD REGION tx2;
-ALTER DATABASE uscs ADD REGION tx3;
-ALTER DATABASE uscs SURVIVE REGION FAILURE;
+ALTER DATABASE regionalpoc SET PRIMARY REGION "us-east";
+ALTER DATABASE regionalpoc ADD REGION "us-west";
+ALTER DATABASE regionalpoc ADD REGION "us-central";
+ALTER DATABASE regionalpoc SURVIVE REGION FAILURE;
 ```
 
 Then apply the DDL from `schema.sql`.
@@ -52,7 +52,19 @@ Then apply the DDL from `schema.sql`.
 python3 show-ranges.py --url <url> --table trailer_global
 ```
 
-For a GLOBAL table, expect every region to hold at least one replica. The zone configuration confirms the same:
+Illustrative output — a GLOBAL table's rows in one range, with every region holding at least one replica:
+
+```
+┌───┬──────────┬──────┬─────────────┬────────────────────────────────────────────────────────────────────┐
+│   │ range_id │ rows │ leaseholder │ replicas                                                           │
+╞───╪══════════╪══════╪═════════════╪════════════════════════════════════════════════════════════════════╡
+│ 1 │ 3806     │ 100  │ us-east (3) │ us-east (1), us-east (3), us-east (6), us-west (5), us-central (8) │
+├───┼──────────┼──────┼─────────────┼────────────────────────────────────────────────────────────────────┤
+│   │ TOTAL    │ 100  │             │                                                                    │
+└───┴──────────┴──────┴─────────────┴────────────────────────────────────────────────────────────────────┘
+```
+
+The zone configuration confirms the same:
 
 ```sql
 > SHOW ZONE CONFIGURATION FROM TABLE trailer_global;
@@ -65,9 +77,9 @@ For a GLOBAL table, expect every region to hold at least one replica. The zone c
                        |     global_reads = true,
                        |     num_replicas = 5,
                        |     num_voters = 3,
-                       |     constraints = '{+region=tx1: 1, +region=tx2: 1, +region=tx3: 1}',
-                       |     voter_constraints = '[+region=tx1]',
-                       |     lease_preferences = '[[+region=tx1]]'
+                       |     constraints = '{+region=us-east: 1, +region=us-west: 1, +region=us-central: 1}',
+                       |     voter_constraints = '[+region=us-east]',
+                       |     lease_preferences = '[[+region=us-east]]'
 ```
 
 ## The workload: dbworkload + Trailers.py
@@ -94,7 +106,7 @@ Passed as a JSON object via `--args`:
 
 ```bash
 dbworkload run -w Trailers.py \
-  --uri "postgresql://<user>:<pass>@<east-gateway>:26257/uscs?sslmode=verify-full" \
+  --uri "postgresql://<user>:<pass>@<east-gateway>:26257/regionalpoc?sslmode=verify-full" \
   --args '{"prefix": "TRL-EAST-", "init": 1000}' \
   -c 10 -d 60
 ```

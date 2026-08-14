@@ -22,6 +22,7 @@ class Trailers:
 
         self.global_numbers = []
         self.rbr_ids = []
+        self.rbr_numbers = []
 
 
     def setup(self, conn: psycopg.Connection, id: int, total_thread_count: int):
@@ -73,10 +74,12 @@ class Trailers:
             ).fetchone()[0]
             offset = random.randint(0, max(0, count - SEED_LIMIT))
             cur.execute(
-                "SELECT id FROM trailer_rbr WHERE region = %s LIMIT %s OFFSET %s",
+                "SELECT id, trailer_number FROM trailer_rbr WHERE region = %s LIMIT %s OFFSET %s",
                 (self.region, SEED_LIMIT, offset),
             )
-            self.rbr_ids.extend(row[0] for row in cur.fetchall())
+            for row in cur.fetchall():
+                self.rbr_ids.append(row[0])
+                self.rbr_numbers.append(row[1])
 
 
     def loop(self):
@@ -86,7 +89,9 @@ class Trailers:
                 self.global_select,
                 self.rbr_insert,
                 self.rbr_update,
-                self.rbr_select
+                self.rbr_select,
+                self.rbr_select_number,
+                self.rbr_select_prefix
             ]
 
 
@@ -147,3 +152,21 @@ class Trailers:
                 (self.region, random.choice(self.rbr_ids)),
             )
             cur.fetchone()
+
+
+    def rbr_select_number(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE trailer_number = %s",
+                (random.choice(self.rbr_numbers),),
+            )
+            cur.fetchone()
+
+
+    def rbr_select_prefix(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE trailer_number LIKE %s LIMIT 1000",
+                (self.prefix + "%",),
+            )
+            cur.fetchall()
