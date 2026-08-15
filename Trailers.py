@@ -18,7 +18,7 @@ class Trailers:
         if "prefix" not in args:
             raise RuntimeError("args is missing required key: prefix")
         self.prefix = args["prefix"]
-        self.init = args.get("init")
+        self.rows = args.get("rows")
 
         self.global_numbers = []
         self.rbr_ids = []
@@ -32,33 +32,59 @@ class Trailers:
             cur.execute("SELECT region FROM [SHOW REGIONS FROM DATABASE]")
             self.regions = [row[0] for row in cur.fetchall()]
 
-            if self.init:
-                share = round(self.init / total_thread_count)
+            if self.rows and total_thread_count == 1:
+                target = round(self.rows / 2)
 
-                for start in range(0, share, BATCH_SIZE):
-                    chunk = min(BATCH_SIZE, share - start)
+                for prefix in datagen.PREFIXES:
+                    count = cur.execute(
+                        "SELECT count(*) FROM trailer_global WHERE trailer_number LIKE %s",
+                        (prefix + "%",),
+                    ).fetchone()[0]
 
-                    values = ", ".join(["(%s || unique_rowid()::STRING, %s)"] * chunk)
-                    params = []
-                    for _ in range(chunk):
-                        params.extend([self.prefix, datagen.random_info()])
-                    cur.execute(
-                        f"INSERT INTO trailer_global (trailer_number, info) VALUES {values}",
-                        params,
-                    )
+                    for start in range(0, target - count, BATCH_SIZE):
+                        chunk = min(BATCH_SIZE, target - count - start)
+                        values = ", ".join(["(%s || unique_rowid()::STRING, %s)"] * chunk)
+                        params = []
+                        for _ in range(chunk):
+                            params.extend([prefix, datagen.random_info()])
+                        cur.execute(
+                            f"INSERT INTO trailer_global (trailer_number, info) VALUES {values}",
+                            params,
+                        )
 
-                    values = ", ".join(["(%s || unique_rowid()::STRING, %s, %s)"] * chunk)
-                    params = []
-                    for _ in range(chunk):
-                        params.extend([
-                            self.prefix,
-                            random.randint(0, 100),
-                            round(random.uniform(0, 75), 2),
-                        ])
-                    cur.execute(
-                        f"INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES {values}",
-                        params,
-                    )
+                    for start in range(0, count - target, BATCH_SIZE):
+                        chunk = min(BATCH_SIZE, count - target - start)
+                        cur.execute(
+                            "DELETE FROM trailer_global WHERE trailer_number LIKE %s LIMIT %s",
+                            (prefix + "%", chunk),
+                        )
+
+                    count = cur.execute(
+                        "SELECT count(*) FROM trailer_rbr WHERE trailer_number LIKE %s",
+                        (prefix + "%",),
+                    ).fetchone()[0]
+
+                    for start in range(0, target - count, BATCH_SIZE):
+                        chunk = min(BATCH_SIZE, target - count - start)
+                        values = ", ".join(["(%s || unique_rowid()::STRING, %s, %s)"] * chunk)
+                        params = []
+                        for _ in range(chunk):
+                            params.extend([
+                                prefix,
+                                random.randint(0, 100),
+                                round(random.uniform(0, 75), 2),
+                            ])
+                        cur.execute(
+                            f"INSERT INTO trailer_rbr (trailer_number, param1, param2) VALUES {values}",
+                            params,
+                        )
+
+                    for start in range(0, count - target, BATCH_SIZE):
+                        chunk = min(BATCH_SIZE, count - target - start)
+                        cur.execute(
+                            "DELETE FROM trailer_rbr WHERE trailer_number LIKE %s LIMIT %s",
+                            (prefix + "%", chunk),
+                        )
 
             count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
             offset = random.randint(0, max(0, count - SEED_LIMIT))
@@ -87,6 +113,7 @@ class Trailers:
                 self.global_insert,
                 self.global_update,
                 self.global_select,
+                self.global_select_info,
                 self.rbr_insert,
                 self.rbr_update,
                 self.rbr_select,
@@ -118,6 +145,15 @@ class Trailers:
                 (random.choice(self.global_numbers),),
             )
             cur.fetchone()
+
+
+    def global_select_info(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, info FROM trailer_global WHERE info LIKE %s LIMIT 1000",
+                ("53ft reefer%",),
+            )
+            cur.fetchall()
 
 
     def rbr_insert(self, conn: psycopg.Connection):

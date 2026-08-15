@@ -100,14 +100,25 @@ The gateway region is implicit in the connection URL: the class discovers it (`g
 Passed as a JSON object via `--args`:
 
 - `prefix` (required) — `"TRL-EAST-"` or `"TRL-WEST-"`; must correspond to the gateway URL's region.
-- `init` (optional) — seed both tables with about this many rows before the run starts, split across threads (each thread inserts `round(init / threads)` rows per table). Required on an empty database. Note the table count afterward is `init` plus one row per table per completed loop pass — the workload keeps inserting as part of its measured functions.
+- `rows` (optional) — maintain each table at this many rows, half per prefix: `setup()` counts each prefix's rows and fills any deficit or trims any excess before the run starts. Only honored at `-c 1` (silently ignored at higher concurrency) — run it as a dedicated maintenance invocation. Required before first use on an empty database. Between maintenance runs, counts drift upward by one row per table per completed loop pass — the workload keeps inserting as part of its measured functions.
 
 ### Running directly
+
+Maintenance run — fill or trim both tables to the target counts (single-threaded by design):
 
 ```bash
 dbworkload run -w Trailers.py \
   --uri "postgresql://<user>:<pass>@<east-gateway>:26257/regionalpoc?sslmode=verify-full" \
-  --args '{"prefix": "TRL-EAST-", "init": 1000}' \
+  --args '{"prefix": "TRL-EAST-", "rows": 1000000}' \
+  -c 1 -i 1
+```
+
+Measured run:
+
+```bash
+dbworkload run -w Trailers.py \
+  --uri "postgresql://<user>:<pass>@<east-gateway>:26257/regionalpoc?sslmode=verify-full" \
+  --args '{"prefix": "TRL-EAST-"}' \
   -c 10 -d 60
 ```
 

@@ -4,7 +4,7 @@ CREATE TABLE trailer_global (
     info                STRING DEFAULT NULL
 ) LOCALITY GLOBAL;
 
-CREATE UNIQUE INDEX ON trailer_global(trailer_number); 
+CREATE UNIQUE INDEX ON trailer_global(trailer_number);
 
 
 CREATE TABLE trailer_rbr (
