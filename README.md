@@ -84,22 +84,27 @@ The zone configuration confirms the same:
 
 ## The workload: dbworkload + Trailers.py
 
-`Trailers.py` is a [dbworkload](https://github.com/cockroachdb/dbworkload) class. Each worker thread runs six functions per pass, and dbworkload reports latency percentiles per function — one stats line per claim being proven:
+`Trailers.py` is a [dbworkload](https://github.com/cockroachdb/dbworkload) class. Each worker thread runs fourteen functions per pass, and dbworkload reports latency percentiles per function — one stats line per claim being proven:
 
 | Function | What it proves |
 |----------|----------------|
 | `global_insert`, `global_update` | GLOBAL write cost — slow from every region (the price of global reads) |
-| `global_select` | GLOBAL read speed — fast, present-time, from every region |
+| `global_select` | GLOBAL point read — fast, present-time, from every region |
+| `global_select_info` | GLOBAL bounded indexed read ("first 1000" class) — fast from every region |
 | `rbr_insert`, `rbr_update` | RBR local write speed — single-region-class latency |
-| `rbr_select` | RBR local read speed — the fastest operation on the board |
+| `rbr_select` | RBR region-pinned point read — the fastest operation on the board |
+| `rbr_select_number` | RBR region-blind point read — the cost of not naming the region |
+| `rbr_select_prefix`, `rbr_select_prefix_aost` | RBR first-1000 of locally-owned rows — plain vs follower read |
+| `rbr_select_prefix_remote`, `rbr_select_prefix_remote_aost` | RBR first-1000 of remote-owned rows — plain (travels to the owning region's leaseholder) vs follower read (served locally); the delta appears on geo-distributed clusters |
+| `rbr_select_param`, `rbr_select_param_aost` | RBR region-independent read (`param1` predicate) — plain vs follower read |
 
-The gateway region is implicit in the connection URL: the class discovers it (`gateway_region()`) at startup and pins its RBR operations to it. Target rows are sampled once at startup from existing data; trailer numbers for inserts are generated server-side (`prefix || unique_rowid()`), so they never collide with the unique indexes.
+The gateway region is implicit in the connection URL: the class discovers it (`gateway_region()`) at startup and pins `rbr_update` and `rbr_select` to it; the other RBR reads are deliberately region-blind or remote-targeted. The `_aost` variants run `AS OF SYSTEM TIME follower_read_timestamp()` — served by local replicas in any region, returning slightly stale data (single-digit seconds). Target rows are sampled once at startup from existing data; trailer numbers for inserts are generated server-side (`prefix || unique_rowid()`), so they never collide with the unique indexes.
 
 ### Args
 
 Passed as a JSON object via `--args`:
 
-- `prefix` (required) — `"TRL-EAST-"` or `"TRL-WEST-"`; must correspond to the gateway URL's region.
+- `prefix` (required) — a two-element list `[local, remote]`. Element 0 drives inserts, seeding, and the local-prefix reads, and must correspond to the gateway URL's region; element 1 drives only the remote-prefix reads. From East: `["TRL-EAST-", "TRL-WEST-"]`; from West: swapped.
 - `rows` (optional) — maintain each table at this many rows, half per prefix: `setup()` counts each prefix's rows and fills any deficit or trims any excess before the run starts. Only honored at `-c 1` (silently ignored at higher concurrency) — run it as a dedicated maintenance invocation. Required before first use on an empty database. Between maintenance runs, counts drift upward by one row per table per completed loop pass — the workload keeps inserting as part of its measured functions.
 
 ### Running directly
@@ -109,7 +114,7 @@ Maintenance run — fill or trim both tables to the target counts (single-thread
 ```bash
 dbworkload run -w Trailers.py \
   --uri "postgresql://<user>:<pass>@<east-gateway>:26257/regionalpoc?sslmode=verify-full" \
-  --args '{"prefix": "TRL-EAST-", "rows": 1000000}' \
+  --args '{"prefix": ["TRL-EAST-", "TRL-WEST-"], "rows": 1000000}' \
   -c 1 -i 1
 ```
 
@@ -118,7 +123,7 @@ Measured run:
 ```bash
 dbworkload run -w Trailers.py \
   --uri "postgresql://<user>:<pass>@<east-gateway>:26257/regionalpoc?sslmode=verify-full" \
-  --args '{"prefix": "TRL-EAST-"}' \
+  --args '{"prefix": ["TRL-EAST-", "TRL-WEST-"]}' \
   -c 10 -d 60
 ```
 
@@ -128,7 +133,7 @@ Run one process per application region (East URL with `TRL-EAST-`, West URL with
 
 ```bash
 docker build -t trailers .
-docker run --rm trailers --uri "..." --args '{"prefix": "TRL-EAST-"}' -c 10 -d 60
+docker run --rm trailers --uri "..." --args '{"prefix": ["TRL-EAST-", "TRL-WEST-"]}' -c 10 -d 60
 ```
 
 The image hardcodes only `dbworkload run -w Trailers.py`; every argument after the image name passes through to dbworkload untouched. Certificates are part of the URI — if it references a cert file path, mount it (`-v /path/to/certs:/path/to/certs:ro`).
