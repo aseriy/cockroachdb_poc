@@ -15,9 +15,10 @@ BATCH_SIZE = 1000
 class Trailers:
 
     def __init__(self, args: dict):
-        if "prefix" not in args:
-            raise RuntimeError("args is missing required key: prefix")
-        self.prefix = args["prefix"]
+        if "prefix" not in args or not isinstance(args["prefix"], list) or len(args["prefix"]) != 2:
+            raise RuntimeError("args key 'prefix' must be a list of two prefixes: [local, remote]")
+        self.prefix = args["prefix"][0]
+        self.prefix_remote = args["prefix"][1]
         self.rows = args.get("rows")
 
         self.global_numbers = []
@@ -118,7 +119,12 @@ class Trailers:
                 self.rbr_update,
                 self.rbr_select,
                 self.rbr_select_number,
-                self.rbr_select_prefix
+                self.rbr_select_prefix,
+                self.rbr_select_prefix_aost,
+                self.rbr_select_prefix_remote,
+                self.rbr_select_prefix_remote_aost,
+                self.rbr_select_param,
+                self.rbr_select_param_aost
             ]
 
 
@@ -204,5 +210,54 @@ class Trailers:
             cur.execute(
                 "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE trailer_number LIKE %s LIMIT 1000",
                 (self.prefix + "%",),
+            )
+            cur.fetchall()
+
+
+    def rbr_select_prefix_aost(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr "
+                "AS OF SYSTEM TIME follower_read_timestamp() "
+                "WHERE trailer_number LIKE %s LIMIT 1000",
+                (self.prefix + "%",),
+            )
+            cur.fetchall()
+
+
+    def rbr_select_prefix_remote(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE trailer_number LIKE %s LIMIT 1000",
+                (self.prefix_remote + "%",),
+            )
+            cur.fetchall()
+
+
+    def rbr_select_prefix_remote_aost(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr "
+                "AS OF SYSTEM TIME follower_read_timestamp() "
+                "WHERE trailer_number LIKE %s LIMIT 1000",
+                (self.prefix_remote + "%",),
+            )
+            cur.fetchall()
+
+
+    def rbr_select_param(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE param1 > 5 LIMIT 100",
+            )
+            cur.fetchall()
+
+
+    def rbr_select_param_aost(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr "
+                "AS OF SYSTEM TIME follower_read_timestamp() "
+                "WHERE param1 > 5 LIMIT 100",
             )
             cur.fetchall()
