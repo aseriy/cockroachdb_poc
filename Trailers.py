@@ -177,11 +177,10 @@ class Trailers:
     def rbr_update(self, conn: psycopg.Connection):
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE trailer_rbr SET param1 = %s, param2 = %s WHERE region = %s AND id = %s",
+                "UPDATE trailer_rbr SET param1 = %s, param2 = %s WHERE id = %s",
                 (
                     random.randint(0, 100),
                     round(random.uniform(0, 75), 2),
-                    self.region,
                     random.choice(self.rbr_ids),
                 ),
             )
@@ -190,8 +189,8 @@ class Trailers:
     def rbr_select(self, conn: psycopg.Connection):
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE region = %s AND id = %s",
-                (self.region, random.choice(self.rbr_ids)),
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE id = %s",
+                (random.choice(self.rbr_ids),),
             )
             cur.fetchone()
 
