@@ -120,6 +120,7 @@ class Trailers:
                 self.rbr_select,
                 self.rbr_select_number,
                 self.rbr_select_prefix,
+                self.rbr_select_prefix_in_region,
                 self.rbr_select_prefix_aost,
                 self.rbr_select_prefix_remote,
                 self.rbr_select_prefix_remote_aost,
@@ -209,6 +210,16 @@ class Trailers:
             cur.execute(
                 "SELECT id, trailer_number, param1, param2 FROM trailer_rbr WHERE trailer_number LIKE %s LIMIT 1000",
                 (self.prefix + "%",),
+            )
+            cur.fetchall()
+
+
+    def rbr_select_prefix_in_region(self, conn: psycopg.Connection):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, trailer_number, param1, param2 FROM trailer_rbr "
+                "WHERE region = %s AND trailer_number LIKE %s LIMIT 1000",
+                (self.region, self.prefix + "%")
             )
             cur.fetchall()
 
