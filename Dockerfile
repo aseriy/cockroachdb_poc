@@ -7,7 +7,8 @@ RUN apt-get update && \
 RUN pip install \
     "dbworkload[postgresql]" \
     psycopg-binary \
-    psycopg
+    psycopg \
+    polars
 
 RUN mkdir -p /app
 COPY Trailers.py /app/

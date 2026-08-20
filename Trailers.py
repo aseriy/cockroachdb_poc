@@ -2,6 +2,7 @@ import random
 import sys
 from pathlib import Path
 
+import polars as pl
 import psycopg
 
 sys.path.append(str(Path(__file__).parent))
@@ -125,7 +126,11 @@ class Trailers:
                 self.rbr_select_prefix_remote,
                 self.rbr_select_prefix_remote_aost,
                 self.rbr_select_param,
-                self.rbr_select_param_aost
+                self.rbr_select_param_aost,
+                self.rbr_report_window,
+                self.rbr_report_window_limit,
+                self.rbr_report_cte,
+                self.rbr_report_cte_limit
             ]
 
 
@@ -271,3 +276,127 @@ class Trailers:
                 "WHERE param1 > 5 LIMIT 100",
             )
             cur.fetchall()
+
+
+    def rbr_report_window(self, conn: psycopg.Connection):
+        query = f"""
+                SELECT
+                    id,
+                    trailer_number,
+                    param1,
+                    param2,
+                    COUNT(*) OVER() total_rows,
+                    ROW_NUMBER() OVER(ORDER BY param2 DESC, trailer_number) rn,
+                    RANK() OVER(ORDER BY param2 DESC) rnk
+                FROM trailer_rbr
+                WHERE trailer_number LIKE '{self.prefix}%'
+                ORDER BY rn
+        """
+
+        result = pl.read_database(
+            query = query,
+            connection = conn,
+            iter_batches = True,
+            batch_size = 10000
+        )
+
+
+    def rbr_report_window_limit(self, conn: psycopg.Connection):
+        query = f"""
+                SELECT
+                    id,
+                    trailer_number,
+                    param1,
+                    param2,
+                    COUNT(*) OVER() total_rows,
+                    ROW_NUMBER() OVER(ORDER BY param2 DESC, trailer_number) rn,
+                    RANK() OVER(ORDER BY param2 DESC) rnk
+                FROM trailer_rbr
+                WHERE trailer_number LIKE '{self.prefix}%'
+                ORDER BY rn
+                LIMIT 1000
+        """
+
+        result = pl.read_database(
+            query = query,
+            connection = conn,
+            iter_batches = True,
+            batch_size = 10000
+        )
+
+
+    def rbr_report_cte(self, conn: psycopg.Connection):
+        query = f"""
+                WITH total AS (
+                    SELECT COUNT(*) AS total_rows
+                    FROM trailer_rbr
+                    WHERE trailer_number LIKE '{self.prefix}%'
+                ),
+                page AS (
+                    SELECT id, trailer_number, param1, param2
+                    FROM trailer_rbr
+                    WHERE trailer_number LIKE '{self.prefix}%'
+                    ORDER BY param2 DESC, trailer_number
+                )
+                SELECT
+                    p.id,
+                    p.trailer_number,
+                    p.param1,
+                    p.param2,
+                    t.total_rows,
+                    ROW_NUMBER() OVER (
+                        ORDER BY p.param2 DESC, p.trailer_number
+                    ) AS rn,
+                    RANK() OVER (
+                        ORDER BY p.param2 DESC
+                    ) AS rnk
+                FROM page p
+                CROSS JOIN total t
+                ORDER BY rn
+        """
+
+        result = pl.read_database(
+            query = query,
+            connection = conn,
+            iter_batches = True,
+            batch_size = 10000
+        )
+
+
+    def rbr_report_cte_limit(self, conn: psycopg.Connection):
+        query = f"""
+                WITH total AS (
+                    SELECT COUNT(*) AS total_rows
+                    FROM trailer_rbr
+                    WHERE trailer_number LIKE '{self.prefix}%'
+                ),
+                page AS (
+                    SELECT id, trailer_number, param1, param2
+                    FROM trailer_rbr
+                    WHERE trailer_number LIKE '{self.prefix}%'
+                    ORDER BY param2 DESC, trailer_number
+                )
+                SELECT
+                    p.id,
+                    p.trailer_number,
+                    p.param1,
+                    p.param2,
+                    t.total_rows,
+                    ROW_NUMBER() OVER (
+                        ORDER BY p.param2 DESC, p.trailer_number
+                    ) AS rn,
+                    RANK() OVER (
+                        ORDER BY p.param2 DESC
+                    ) AS rnk
+                FROM page p
+                CROSS JOIN total t
+                ORDER BY rn
+                LIMIT 1000
+        """
+
+        result = pl.read_database(
+            query = query,
+            connection = conn,
+            iter_batches = True,
+            batch_size = 10000
+        )
