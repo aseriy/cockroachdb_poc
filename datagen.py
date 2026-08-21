@@ -30,9 +30,27 @@ NOTES = [
     "tires replaced", "door seal replaced", "kingpin inspected",
 ]
 
+FIRST_NAMES = [
+    "James", "Mary", "Robert", "Patricia", "John", "Jennifer",
+    "Michael", "Linda", "David", "Elizabeth", "William", "Barbara",
+]
+
+LAST_NAMES = [
+    "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia",
+    "Miller", "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez",
+]
+
 
 def random_date():
     return f"2026-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
+
+
+def random_timestamp():
+    return f"{random_date()} {random.randint(0, 23):02d}:{random.randint(0, 59):02d}:{random.randint(0, 59):02d}"
+
+
+def random_name():
+    return f"{random.choice(FIRST_NAMES)} {random.choice(LAST_NAMES)}"
 
 
 def random_info():

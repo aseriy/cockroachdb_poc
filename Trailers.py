@@ -88,6 +88,10 @@ class Trailers:
                             (prefix + "%", chunk),
                         )
 
+                self.populate_t_driver(cur)
+                self.populate_t_gate_arr(cur)
+                self.populate_t_appt(cur)
+
             count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
             offset = random.randint(0, max(0, count - SEED_LIMIT))
             cur.execute(
@@ -108,6 +112,111 @@ class Trailers:
             for row in cur.fetchall():
                 self.rbr_ids.append(row[0])
                 self.rbr_numbers.append(row[1])
+
+
+    def populate_t_driver(self, cur: psycopg.Cursor):
+        target = self.rows
+
+        count = cur.execute("SELECT count(*) FROM t_driver").fetchone()[0]
+
+        for start in range(0, target - count, BATCH_SIZE):
+            chunk = min(BATCH_SIZE, target - count - start)
+            values = ", ".join(["(%s)"] * chunk)
+            params = []
+            for _ in range(chunk):
+                params.append(datagen.random_name())
+            cur.execute(
+                f"INSERT INTO t_driver (name) VALUES {values}",
+                params,
+            )
+
+
+    def populate_t_gate_arr(self, cur: psycopg.Cursor):
+        target = self.rows
+
+        count = cur.execute("SELECT count(*) FROM t_driver").fetchone()[0]
+        offset = random.randint(0, max(0, count - SEED_LIMIT))
+        cur.execute(
+            "SELECT id FROM t_driver LIMIT %s OFFSET %s",
+            (SEED_LIMIT, offset),
+        )
+        driver_ids = [row[0] for row in cur.fetchall()]
+
+        count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
+        offset = random.randint(0, max(0, count - SEED_LIMIT))
+        cur.execute(
+            "SELECT id FROM trailer_global LIMIT %s OFFSET %s",
+            (SEED_LIMIT, offset),
+        )
+        trailer_ids = [row[0] for row in cur.fetchall()]
+
+        count = cur.execute("SELECT count(*) FROM t_gate_arr").fetchone()[0]
+
+        for start in range(0, target - count, BATCH_SIZE):
+            chunk = min(BATCH_SIZE, target - count - start)
+            values = ", ".join(["(%s, %s, %s)"] * chunk)
+            params = []
+            for _ in range(chunk):
+                params.extend([
+                    random.choice(trailer_ids),
+                    random.choice(driver_ids),
+                    datagen.random_timestamp(),
+                ])
+            cur.execute(
+                f"INSERT INTO t_gate_arr (trailer_id, driver_id, update_ts) VALUES {values}",
+                params,
+            )
+
+        for start in range(0, count - target, BATCH_SIZE):
+            chunk = min(BATCH_SIZE, count - target - start)
+            cur.execute(
+                "DELETE FROM t_gate_arr LIMIT %s",
+                (chunk,),
+            )
+
+
+    def populate_t_appt(self, cur: psycopg.Cursor):
+        target = self.rows
+
+        count = cur.execute("SELECT count(*) FROM t_driver").fetchone()[0]
+        offset = random.randint(0, max(0, count - SEED_LIMIT))
+        cur.execute(
+            "SELECT id FROM t_driver LIMIT %s OFFSET %s",
+            (SEED_LIMIT, offset),
+        )
+        driver_ids = [row[0] for row in cur.fetchall()]
+
+        count = cur.execute("SELECT count(*) FROM trailer_global").fetchone()[0]
+        offset = random.randint(0, max(0, count - SEED_LIMIT))
+        cur.execute(
+            "SELECT id FROM trailer_global LIMIT %s OFFSET %s",
+            (SEED_LIMIT, offset),
+        )
+        trailer_ids = [row[0] for row in cur.fetchall()]
+
+        count = cur.execute("SELECT count(*) FROM t_appt").fetchone()[0]
+
+        for start in range(0, target - count, BATCH_SIZE):
+            chunk = min(BATCH_SIZE, target - count - start)
+            values = ", ".join(["(%s, %s, %s)"] * chunk)
+            params = []
+            for _ in range(chunk):
+                params.extend([
+                    random.choice(trailer_ids),
+                    random.choice(driver_ids),
+                    datagen.random_timestamp(),
+                ])
+            cur.execute(
+                f"INSERT INTO t_appt (trailer_id, driver_id, update_ts) VALUES {values}",
+                params,
+            )
+
+        for start in range(0, count - target, BATCH_SIZE):
+            chunk = min(BATCH_SIZE, count - target - start)
+            cur.execute(
+                "DELETE FROM t_appt LIMIT %s",
+                (chunk,),
+            )
 
 
     def loop(self):
