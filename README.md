@@ -146,3 +146,20 @@ Demonstrates that the cluster is one consistent database regardless of entry poi
 cp config.yaml.tmpl config.yaml   # fill in the per-region connection URLs
 python3 region-hopper.py
 ```
+
+
+## Hibernate
+
+```bash
+docker run --rm -v m2cache:/root/.m2 -v "$(pwd)/hibernate":/app -w /app maven:3.9-eclipse-temurin-21 mvn compile
+```
+
+
+```bash
+docker run --rm -v m2cache:/root/.m2 \
+-v "$(pwd)/hibernate":/app \
+-w /app -v <cert_dir_path>:/certs:ro \
+maven:3.9-eclipse-temurin-21  \
+mvn -q compile exec:java \
+-Dexec.args="--url 'jdbc:postgresql://<host>:36257/<database>?user=<user>&password=<password>&sslmode=verify-full&sslrootcert=/certs/ca.crt'"
+```
