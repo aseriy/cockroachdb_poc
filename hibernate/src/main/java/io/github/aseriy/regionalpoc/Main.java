@@ -42,26 +42,21 @@ public class Main {
         try (SessionFactory sessionFactory = configuration.buildSessionFactory();
              Session session = sessionFactory.openSession()) {
 
-            Warehouse warehouse = session
-                    .createQuery("from Warehouse", Warehouse.class)
+            Object[] row = session
+                    .createQuery("select ga.warehouseId, ga.crdbRegion from GateArrival ga", Object[].class)
                     .setMaxResults(1)
                     .getSingleResult();
-            String crdbRegion = switch (warehouse.getRegion()) {
-                case "east" -> "tx1";
-                case "west" -> "tx3";
-                default -> throw new IllegalStateException(
-                        "unexpected warehouse region: " + warehouse.getRegion());
-            };
-            System.out.println("warehouse: " + warehouse.getId()
-                    + " region: " + warehouse.getRegion()
-                    + " -> " + crdbRegion);
+            UUID warehouseId = (UUID) row[0];
+            String crdbRegion = (String) row[1];
+            System.out.println("warehouse_id: " + warehouseId
+                    + " crdb_region: " + crdbRegion);
 
-            runQuery(session, warehouse.getId(), "filter off");
+            runQuery(session, warehouseId, "filter off");
 
             session.enableFilter(RegionFilterContributor.FILTER_NAME)
                     .setParameter("region", crdbRegion);
 
-            runQuery(session, warehouse.getId(), "filter on ");
+            runQuery(session, warehouseId, "filter on ");
         }
     }
 

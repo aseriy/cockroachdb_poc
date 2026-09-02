@@ -20,6 +20,9 @@ public class GateArrival {
     @Column(name = "trailer_id")
     private UUID trailerId;
 
+    @Column(name = "crdb_region", insertable = false, updatable = false)
+    private String crdbRegion;
+
     public UUID getId() {
         return id;
     }
@@ -30,5 +33,9 @@ public class GateArrival {
 
     public UUID getTrailerId() {
         return trailerId;
+    }
+
+    public String getCrdbRegion() {
+        return crdbRegion;
     }
 }
